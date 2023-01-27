@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Ball Blast</title>
+  <link rel="icon" href="../static/icon.png">
+  <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+</head>
+<body>
+
+<canvas id="myCanvas" width="1000" height="600"></canvas>
+
+<div id="level" class="w3-center">
+  <a id="restart" href="../index.html">Quit</a>
+</div>
+
+
+<style>
+  canvas { background: #d6f3ff; display: block; margin: 0 auto; }
+  #level { font-size: 24px; font-family: sans-serif; margin-left: 40px;
+    margin-top: 10px; }
+  #restart { font-size: 24px; font-family: sans-serif; margin-left: 40px;
+    margin-top: 10px; color: black; text-decoration: none; }
+  #next { font-size: 24px; font-family: sans-serif; margin-left: 40px;
+    margin-top: 10px; color: #bbbbbb; text-decoration: none; }
+</style>
+
+<script>
+// === canvas globals ===
+var canvas = document.getElementById("myCanvas");
+var ctx = canvas.getContext("2d");
+var canvas_h = 600;
+var canvas_w = 1000;
+
+// === sounds ===
+var audio_bounce = new Audio('../static/sounds/bounce.mp3');
+var audio_death = new Audio('../static/sounds/death.mp3');
+var audio_win = new Audio('../static/sounds/win.mp3');
+
+
+// === keyboard handlers ===
+var rightPressed = false;
+var leftPressed = false;
+var upPressed = false;
+
+document.addEventListener("keydown", keyDownHandler, false);
+document.addEventListener("keyup", keyUpHandler, false);
+
+function keyDownHandler(e) {
+    if(e.keyCode == 39) {
+        rightPressed = true;
+    }
+    else if(e.keyCode == 37) {
+        leftPressed = true;
+    }
+
+    if (e.keyCode == 38) {
+      upPressed = true;
+    }
+}
+function keyUpHandler(e) {
+    if(e.keyCode == 39) {
+        rightPressed = false;
+    }
+    else if(e.keyCode == 37) {
+        leftPressed = false;
+    }
+
+    if (e.keyCode == 38) {
+      upPressed = false;
+    }
+}
+
+
+
+// === location mappings ===
+// still map
+var empty_px = 0;
+var solid_px = 2;
+var hazard_px = 3;
+var complete_px = 4;
+
+var map = new Array(canvas_w); // 600 x 1000 grid
+for (var i = 0; i < map.length; i++) {
+  map[i] = new Array(canvas_h);
+  for (var j = 0; j < map[i].length; j++) {
+    map[i][j] = empty_px;
+  }
+}
+
+// player
+var playerLocation = [ [0, 0], [0, 0], [0, 0], [0, 0], [0, 0] ];
+var playerX = 40;
+var playerY = 90;
+
+var jumpFrame = 0;
+var fallFrame = 0;
+var mainFrame = 0;
+var delayFrame = 0;
+
+
+
+function playerLocate(direction) {
+  var d = 0;
+  if (direction === "left") d = 1;
+  else if (direction === "right") d = 2;
+  else if (direction === "up") d = 3;
+  else if (direction === "down") d = 4;
+  else d = 0;
+
+  return map[playerLocation[d][0]][playerLocation[d][1]];
+}
+
+
+// === build functions ===
+function buildRectangleStd(x, y, width, height, color, type) {
+  if (type == -1) {
+    return;
+  }
+
+  for (var i = x; i < x + width; i++) {
+    for (var j = y; j < y + height; j++) {
+      if (i < canvas_w && j < canvas_h) {
+        map[i][j] = type;
+      }
+    }
+  }
+}
+
+function buildRectangle(x, y, width, height, color, type) {
+  buildRectangleStd(x, canvas_h - y - height, width, height, color, type);
+}
+
+function buildSolid(x, y, width, height, color) {
+  buildRectangle(x, y, width, height, color, solid_px);
+}
+
+function buildHazard(x, y, width, height, color) {
+  buildRectangle(x, y, width, height, color, hazard_px);
+}
+
+function buildWinBlock(x, y, width, height, color) {
+  buildRectangle(x, y, width, height, color, complete_px);
+}
+
+function buildBoundaries() {
+  buildSolid(0, 0, canvas_w, 50, "#855e42");
+  buildSolid(0, 0, 10, canvas_h, "#4d4d4d");
+  buildSolid(0, canvas_h - 10, canvas_w, 10, "#4d4d4d");
+  buildSolid(canvas_w - 10, 0, 10, canvas_h, "#4d4d4d");
+}
+
+
+
+// === draw functions ===
+function drawRectangeStd(x, y, width, height, color, type) {
+  ctx.beginPath();
+  ctx.rect(x, y, width, height);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.closePath();
+}
+
+function drawRectangle(x, y, width, height, color, type) {
+  drawRectangeStd(x, canvas_h - y - height, width, height, color, type);
+}
+
+function drawSolid(x, y, width, height, color) {
+  drawRectangle(x, y, width, height, color, solid_px);
+}
+
+function drawHazard(x, y, width, height, color) {
+  drawRectangle(x, y, width, height, color, hazard_px);
+}
+
+function drawWinBlock(x, y, width, height, color) {
+  drawRectangle(x, y, width, height, color, complete_px);
+}
+
+
+function drawPlayerStd(x, y) {
+    ctx.beginPath();
+    ctx.arc(x, y, 10, 0, Math.PI*2);
+    ctx.fillStyle = "#0095DD";
+    ctx.fill();
+    ctx.closePath();
+
+    playerLocation[0] = [x, y];
+    playerLocation[1] = [x-10, y];
+    playerLocation[2] = [x+10, y];
+    playerLocation[3] = [x, y-10];
+    playerLocation[4] = [x, y+10];
+}
+
+function drawPlayer(x, y) {
+  drawPlayerStd(x + 10, canvas_h - y - 10);
+}
+
+
+
+// === enemy functions ===
+var enemies = new Array(0);
+var enemyData = new Array(0);
+
+function addEnemy(x, y, width, height, color1, color2) {
+  enemies.push([x, y, width, height, color1, color2]);
+  enemyData.push(0);
+}
+
+function drawEnemies() {
+  for (var i = 0; i < enemies.length; i++) {
+    var en = enemies[i];
+    if (((mainFrame - (mainFrame % 10)) / 10) % 2 == 0) {
+      drawRectangle(en[0], en[1], en[2], en[3], en[4]);
+    }
+    else {
+      drawRectangle(en[0], en[1], en[2], en[3], en[5]);
+    }
+  }
+}
+
+function enemyCheck() {
+  for (var i = 0; i < enemies.length; i++) {
+    var en = enemies[i];
+    var x = en[0];
+    var y = canvas_h - en[1] - en[3];
+    var width = en[2];
+    var height = en[3];
+
+    // console.log(y);
+
+    for (var j = 0; j < playerLocation.length; j++) {
+      var locx = playerLocation[j][0] - 1;
+      var locy = playerLocation[j][1];
+      if (locx > x && locx < x + width) {
+        if (locy > y && locy < y + height) {
+          return true;
+        }
+      }
+    }
+
+  }
+
+  return false;
+}
+
+function moveEnemy(id, direction) {
+
+  if (direction === "left") {
+    enemies[id][0] -= 3;
+  } else if (direction === "right") {
+    enemies[id][0] += 3;
+  } else if (direction === "up") {
+    enemies[id][1] += 3;
+  } else if (direction === "down") {
+    enemies[id][1] -= 3;
+  }
+
+}
+
+function moveEnemyLeftRight(id) {
+  if (mainFrame < 50) {
+    moveEnemy(id, "right");
+  } else {
+    moveEnemy(id, "left");
+  }
+}
+
+function moveEnemyUpDown(id, offset) {
+  var mf = (mainFrame + offset) % 100;
+  if (mf < 50) {
+    moveEnemy(id, "up");
+  } else {
+    moveEnemy(id, "down");
+  }
+}
+
+function crawlEnemy(id) {
+  var en = enemies[id];
+  var x = en[0];
+  var y = canvas_h - en[1] - en[3];
+  var width = en[2];
+  var height = en[3];
+  if (map[x][y + height - 3] == solid_px) {
+    enemyData[id] = 1;
+  } else if (map[x + width][y + height - 3] == solid_px) {
+    enemyData[id] = -1;
+  }
+
+  console.log(x, y - 3);
+
+  if (map[x][y + height] != solid_px) {
+    moveEnemy(id, "down");
+  }
+
+
+  if (enemyData[id] == -1) {
+    moveEnemy(id, "left");
+  } else {
+    moveEnemy(id, "right");
+  }
+}
+
+function fireEnemy(id, direction, orig_x) {
+  var en = enemies[id];
+  var x = en[0];
+  var y = canvas_h - en[1] - en[3];
+  var width = en[2];
+  var height = en[3];
+
+  if (direction === "left") {
+    if (x - 7 < 0) {
+      enemies[id][0] = orig_x;
+    } else {
+      moveEnemy(id, "left");
+      moveEnemy(id, "left");
+    }
+  }
+  else if (direction === "right") {
+    if (x + 7 > canvas_w) {
+      enemies[id][0] = orig_x;
+    } else {
+      moveEnemy(id, "right");
+      moveEnemy(id, "right");
+    }
+  }
+}
+
+
+
+
+// === level creation ===
+var solids = new Array(0);
+var hazards = new Array(0);
+var winBlocks = new Array(0);
+
+function addSolid(x, y, width, height, color) {
+  solids.push( [x, y, width, height, color] );
+}
+
+function addHazard(x, y, width, height, color) {
+  hazards.push( [x, y, width, height, color] );
+}
+
+function addWinBlock(x, y, width, height, color) {
+  winBlocks.push( [x, y, width, height, color] );
+}
+
+function addBoundaries() {
+  // colors
+  var c_dirt = "#855e42";
+  var c_sea = "#69bfcf";
+  var c_border = "#4d4d4d";
+  var c_stone = "#b5b5b5";
+
+  // ground
+  addSolid(0, 0, 150, 50, c_dirt);
+  addSolid(350, 0, 250, 50, c_dirt);
+  addSolid(800, 0, 250, 100, c_dirt);
+
+  // water
+  addHazard(150, 0, 200, 25, c_sea);
+  addHazard(600, 0, 200, 25, c_sea);
+
+  // borders
+  addSolid(0, 0, 10, canvas_h, c_border);
+  addSolid(0, canvas_h - 10, canvas_w, 10, c_border);
+  addSolid(canvas_w - 10, 0, 10, canvas_h, c_border);
+}
+
+
+function buildLevel() {
+  // build solids, hazards, add enemies
+  for (var i = 0; i < solids.length; i++) {
+    buildSolid(solids[i][0], solids[i][1], solids[i][2], solids[i][3], solids[i][4]);
+  }
+
+  for (var i = 0; i < hazards.length; i++) {
+    buildHazard(hazards[i][0], hazards[i][1], hazards[i][2], hazards[i][3], hazards[i][4]);
+  }
+
+  for (var i = 0; i < winBlocks.length; i++) {
+    buildWinBlock(winBlocks[i][0], winBlocks[i][1], winBlocks[i][2], winBlocks[i][3], winBlocks[i][4]);
+  }
+}
+
+function drawLevel() {
+  // call draw for solids, hazards, control enemies
+
+  for (var i = 0; i < solids.length; i++) {
+    drawSolid(solids[i][0], solids[i][1], solids[i][2], solids[i][3], solids[i][4]);
+  }
+
+  for (var i = 0; i < hazards.length; i++) {
+    drawHazard(hazards[i][0], hazards[i][1], hazards[i][2], hazards[i][3], hazards[i][4]);
+  }
+
+  for (var i = 0; i < winBlocks.length; i++) {
+    drawWinBlock(winBlocks[i][0], winBlocks[i][1], winBlocks[i][2], winBlocks[i][3], winBlocks[i][4]);
+  }
+
+  drawEnemies();
+
+  enemyActions();
+}
+
+
+// level creation
+function createLevel() {
+  // colors
+  var c_dirt = "#855e42";
+  var c_sea = "#69bfcf";
+  var c_border = "#4d4d4d";
+  var c_stone = "#b5b5b5";
+  var c_tube = "#29941f";
+  var c_cannon = "#292929";
+  var c_brick = "#b55c5c";
+  var c_cloud = "#ffffff";
+  var c_gold = "#e3d022";
+  var c_caution1 = "#fcb80d";
+  var c_caution2 = "#ff8f0f";
+  var c_bullet1 = "#961be3";
+  var c_bullet2 = "#c727e3";
+
+
+  addBoundaries();
+}
+createLevel();
+
+function enemyActions() {
+}
+
+
+buildLevel();
+
+audio_win.play();
+
+// === main draw loop ===
+function draw() {
+
+  // draw changes
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawLevel();
+  drawPlayer(playerX, playerY);
+  drawWin();
+
+  // left right movement
+  if (rightPressed) {
+    if (playerLocate("right") == solid_px) { playerX -= 3; }
+    else { playerX += 4; }
+  }
+  else if (leftPressed) {
+    if (playerLocate("left") == solid_px) { playerX += 3; }
+    else { playerX -= 4; }
+  }
+
+  // gravity
+  if (playerLocate("down") != solid_px) {
+    if (fallFrame > 70) playerY -= 8;
+    else if (fallFrame > 50) playerY -= 7;
+    else if (fallFrame > 30) playerY -= 6;
+    else if (fallFrame  > 10) playerY -= 4;
+    else playerY -= 2;
+    fallFrame++;
+  } else {
+    fallFrame = 0;
+  }
+
+  // jump
+  if (upPressed && playerLocate("down") == solid_px) {
+    jumpFrame = 50;
+    audio_bounce.load();
+    audio_bounce.play();
+  }
+
+  if (jumpFrame > 0) {
+    if (jumpFrame > 40) playerY += 11;
+    else if (jumpFrame > 30) playerY += 8;
+    else if (jumpFrame > 20) playerY += 6;
+    else if (jumpFrame > 10) playerY += 4;
+    else playerY += 2;
+    jumpFrame--;
+  }
+
+  if (playerLocate("up") == solid_px) {
+    playerY -= 3;
+    jumpFrame = 0;
+  }
+
+
+  // hazard/enemy check
+  if (playerLocate("up") == hazard_px || playerLocate("down") == hazard_px ||
+      playerLocate("left") == hazard_px || playerLocate("right") == hazard_px ||
+      playerLocate("center") == hazard_px || enemyCheck()) {
+
+    return;
+  }
+
+
+
+
+  mainFrame++;
+  if (mainFrame >= 100) { mainFrame = 0; }
+  if (delayFrame < 1000) { delayFrame++; }
+
+  requestAnimationFrame(draw);
+}
+
+
+function drawGameOver() {
+  ctx.font = "32px Arial";
+  ctx.fillStyle = "black";
+  ctx.fillText("Game Over", 400, 280);
+}
+
+
+function drawWin() {
+  ctx.font = "32px Arial";
+  ctx.fillStyle = "black";
+  ctx.fillText("You Win The Game!", 340, 280);
+}
+
+
+draw();
+</script>
+
+
+</body>
+</html>

@@ -1,4 +1,5 @@
-# Jack's Platform Game
-Simple platform game made from scratch in javascript! Use arrow keys to move and jump.
+# Ball Blast Platform Game
 
-Levels are currently in separate files. Work in progress to make the code more dynamic.
+Simple platform game made from scratch in javascript using canvas drawing! Use arrow keys to move and jump.
+
+https://jackarnold84.github.io/ball-blast-game/
